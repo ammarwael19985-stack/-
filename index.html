@@ -66,6 +66,11 @@
     padding:14px 16px;font-size:.78rem;color:var(--muted);line-height:2;
   }
   .hint-box b{color:var(--ink);}
+  .col-toggle{
+    display:flex;align-items:center;gap:8px;justify-content:center;
+    margin-top:18px;font-size:.82rem;color:var(--ink);cursor:pointer;
+  }
+  .col-toggle input{width:18px;height:18px;cursor:pointer;}
   .status-bar{
     display:flex;justify-content:space-between;align-items:center;
     background:var(--panel);border:1px solid var(--line);
@@ -107,6 +112,13 @@
   tr.branch-done td.qty{color:#9a9488;text-decoration:line-through;}
   tr.branch-done td:first-child{text-decoration:line-through;}
   .progress-note{font-size:.78rem;color:var(--muted);margin-bottom:14px;}
+  .branch-table td.actual{width:78px;padding:6px 4px;}
+  .actual-input{
+    width:100%;padding:8px 4px;border:1px solid var(--line);border-radius:8px;
+    text-align:center;font-size:1rem;font-weight:700;color:var(--ink);background:#faf8f2;
+  }
+  .actual-input:focus{outline:2px solid var(--accent);border-color:var(--accent);}
+  .branch-table td.zero-note{color:#b7b1a3;font-size:.8rem;text-align:center;}
   .not-found{
     background:#fbeae5;border:1px solid #e3b6a6;color:var(--warn);
     border-radius:14px;padding:24px;text-align:center;font-size:1rem;font-weight:700;
@@ -133,14 +145,18 @@
     <div class="upload-card">
       <div class="icon">📦</div>
       <h2>ارفع ملف الطلبات</h2>
-      <p>ارفع ملف الإكسيل اللي فيه الباركود واسم المنتج وكمية كل فرع، وبعدين اضرب باركود أي منتج يطلعلك الكميات لكل فرع فورًا.</p>
+      <p>ارفع ملف الإكسيل اللي فيه الباركود وكمية كل فرع، وبعدين اضرب باركود أي منتج يطلعلك الكميات لكل فرع فورًا.</p>
       <label class="file-btn">
         اختيار ملف إكسيل
         <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" />
       </label>
       <div class="error-msg hidden" id="uploadError"></div>
-      <div class="hint-box">
-        <div><b>شكل الملف المطلوب:</b></div>
+      <label class="col-toggle">
+        <input type="checkbox" id="hasProductCol" checked />
+        الملف فيه عمود اسم المنتج بعد الباركود
+      </label>
+      <div class="hint-box" id="hintBox">
+        <div><b>شكل الملف (فيه اسم منتج):</b></div>
         <div>العمود الأول: الباركود</div>
         <div>العمود الثاني: اسم المنتج</div>
         <div>باقي الأعمدة: اسم كل فرع، وتحته الكمية المطلوبة منه</div>
@@ -153,6 +169,8 @@
       <span>الملف محمّل — <b id="rowCountLabel">0</b> منتج / <b id="branchCountLabel">0</b> فرع</span>
       <button id="resetBtn">رفع ملف جديد</button>
     </div>
+
+    <button id="exportBtn" class="file-btn" style="width:100%;margin-bottom:18px;background:var(--accent-dark);">📄 تصدير تقرير التحضير (إكسيل)</button>
 
     <div class="scan-box">
       <label>اضرب الباركود دلوقتي</label>
@@ -186,6 +204,7 @@ const uploadError = document.getElementById('uploadError');
 const rowCountLabel = document.getElementById('rowCountLabel');
 const branchCountLabel = document.getElementById('branchCountLabel');
 const resetBtn = document.getElementById('resetBtn');
+const exportBtn = document.getElementById('exportBtn');
 const scanForm = document.getElementById('scanForm');
 const barcodeInput = document.getElementById('barcodeInput');
 const placeholder = document.getElementById('placeholder');
@@ -193,6 +212,23 @@ const resultBox = document.getElementById('resultBox');
 const notFoundBox = document.getElementById('notFoundBox');
 const historyBox = document.getElementById('historyBox');
 const historyList = document.getElementById('historyList');
+
+const hasProductCol = document.getElementById('hasProductCol');
+const hintBox = document.getElementById('hintBox');
+
+function updateHint(){
+  if(hasProductCol.checked){
+    hintBox.innerHTML = '<div><b>شكل الملف (فيه اسم منتج):</b></div>' +
+      '<div>العمود الأول: الباركود</div>' +
+      '<div>العمود الثاني: اسم المنتج</div>' +
+      '<div>باقي الأعمدة: اسم كل فرع، وتحته الكمية المطلوبة منه</div>';
+  } else {
+    hintBox.innerHTML = '<div><b>شكل الملف (من غير اسم منتج):</b></div>' +
+      '<div>العمود الأول: الباركود</div>' +
+      '<div>باقي الأعمدة: اسم كل فرع، وتحته الكمية المطلوبة منه</div>';
+  }
+}
+hasProductCol.addEventListener('change', updateHint);
 
 function showUploadError(msg){
   uploadError.textContent = msg;
@@ -226,8 +262,10 @@ function processRows(rows){
     showUploadError('الملف فاضي أو مفيهوش بيانات كفاية.');
     return;
   }
+  const withProduct = hasProductCol.checked;
+  const branchStart = withProduct ? 2 : 1;
   const header = rows[0];
-  branchNames = header.slice(2).map(h => String(h).trim()).filter(Boolean);
+  branchNames = header.slice(branchStart).map(h => String(h).trim()).filter(Boolean);
   index = {};
   rowCount = 0;
   for(let i=1; i<rows.length; i++){
@@ -235,9 +273,9 @@ function processRows(rows){
     if(!r || r.length===0) continue;
     const code = String(r[0] !== undefined ? r[0] : '').trim();
     if(!code) continue;
-    const product = String(r[1] !== undefined ? r[1] : '').trim();
+    const product = withProduct ? String(r[1] !== undefined ? r[1] : '').trim() : '';
     const qtys = branchNames.map((_, idx) => {
-      const v = r[2+idx];
+      const v = r[branchStart+idx];
       return (v === undefined || v === '') ? 0 : v;
     });
     index[code] = {product: product, qtys: qtys};
@@ -248,16 +286,51 @@ function processRows(rows){
     return;
   }
   if(branchNames.length === 0){
-    showUploadError('مقدرتش ألاقي أعمدة فروع بعد عمود الباركود واسم المنتج.');
+    showUploadError('مقدرتش ألاقي أعمدة فروع بعد عمود الباركود' + (withProduct ? ' واسم المنتج' : '') + '.');
     return;
   }
   rowCountLabel.textContent = rowCount;
   branchCountLabel.textContent = branchNames.length;
+  saveSheetData();
   uploadScreen.classList.add('hidden');
   scanScreen.classList.remove('hidden');
   statusTag.textContent = 'جاهز للمسح';
   barcodeInput.focus();
 }
+
+function saveSheetData(){
+  try{
+    localStorage.setItem('sheetData', JSON.stringify({
+      branchNames: branchNames,
+      index: index,
+      rowCount: rowCount
+    }));
+  }catch(e){}
+}
+
+function loadSheetData(){
+  try{
+    const raw = localStorage.getItem('sheetData');
+    if(!raw) return false;
+    const data = JSON.parse(raw);
+    if(!data || !data.branchNames || !data.index) return false;
+    branchNames = data.branchNames;
+    index = data.index;
+    rowCount = data.rowCount || Object.keys(index).length;
+    return true;
+  }catch(e){ return false; }
+}
+
+// Restore previous session on load/refresh
+(function restoreSession(){
+  if(loadSheetData()){
+    rowCountLabel.textContent = rowCount;
+    branchCountLabel.textContent = branchNames.length;
+    uploadScreen.classList.add('hidden');
+    scanScreen.classList.remove('hidden');
+    statusTag.textContent = 'جاهز للمسح';
+  }
+})();
 
 resetBtn.addEventListener('click', function(){
   branchNames = [];
@@ -268,6 +341,7 @@ resetBtn.addEventListener('click', function(){
   try{
     Object.keys(localStorage).filter(function(k){ return k.indexOf('prep:') === 0; })
       .forEach(function(k){ localStorage.removeItem(k); });
+    localStorage.removeItem('sheetData');
   }catch(e){}
   historyList.innerHTML = '';
   historyBox.classList.add('hidden');
@@ -296,40 +370,67 @@ function renderResult(code, row){
   const prep = getPrepState(code);
   let total = 0;
   let doneCount = 0;
+  let neededCount = 0;
   let rowsHtml = '';
   branchNames.forEach(function(name, i){
     const qty = row.qtys[i];
-    total += Number(qty) || 0;
-    const isDone = !!prep[name];
-    if(isDone) doneCount++;
-    const zeroClass = (Number(qty) || 0) === 0 ? ' zero' : '';
-    const doneClass = isDone ? ' branch-done' : '';
+    const qtyNum = Number(qty) || 0;
+    total += qtyNum;
+    const isZero = qtyNum === 0;
+    let actionCell;
+    let doneClass = '';
+    if(isZero){
+      actionCell = '<td class="zero-note" colspan="2">لا يحتاج</td>';
+    } else {
+      neededCount++;
+      const entry = (prep[name] && typeof prep[name] === 'object') ? prep[name] : {};
+      const isDone = !!entry.done;
+      if(isDone){ doneCount++; doneClass = ' branch-done'; }
+      const actualVal = (entry.actual !== undefined && entry.actual !== '') ? entry.actual : qty;
+      actionCell =
+        '<td class="actual"><input type="number" inputmode="decimal" class="actual-input" data-branch="' + escapeHtml(name) + '" value="' + escapeHtml(String(actualVal)) + '" /></td>' +
+        '<td class="check"><span class="branch-check' + (isDone ? ' done' : '') + '" role="button" data-branch="' + escapeHtml(name) + '" aria-label="تحضير ' + escapeHtml(name) + '">' + (isDone ? '✓' : '') + '</span></td>';
+    }
+    const zeroClass = isZero ? ' zero' : '';
     rowsHtml += '<tr class="' + (zeroClass + doneClass).trim() + '" data-branch="' + escapeHtml(name) + '">' +
       '<td>' + escapeHtml(name) + '</td>' +
       '<td class="qty">' + qty + '</td>' +
-      '<td class="check"><span class="branch-check' + (isDone ? ' done' : '') + '" role="button" aria-label="تحضير ' + escapeHtml(name) + '">' + (isDone ? '✓' : '') + '</span></td>' +
+      actionCell +
       '</tr>';
   });
-  rowsHtml += '<tr class="total-row"><td>الإجمالي</td><td class="qty">' + total + '</td><td></td></tr>';
+  rowsHtml += '<tr class="total-row"><td>الإجمالي</td><td class="qty">' + total + '</td><td colspan="2"></td></tr>';
 
   resultBox.innerHTML =
-    '<div class="pname">' + escapeHtml(row.product) + '</div>' +
-    '<div class="pbarcode">' + escapeHtml(code) + '</div>' +
-    '<div class="progress-note">اتحضر ' + doneCount + ' من ' + branchNames.length + ' فرع — دوس ✓ جمب الفرع بعد ما تحضّره</div>' +
+    '<div class="pname">' + escapeHtml(row.product || code) + '</div>' +
+    (row.product ? '<div class="pbarcode">' + escapeHtml(code) + '</div>' : '') +
+    '<div class="progress-note">اتحضر ' + doneCount + ' من ' + neededCount + ' فرع محتاج تحضير — عدّل الكمية لو مختلفة ودوس ✓ بعد التحضير</div>' +
     '<table class="branch-table"><tbody>' + rowsHtml + '</tbody></table>';
 }
 
 resultBox.addEventListener('click', function(e){
   const btn = e.target.closest('.branch-check');
   if(!btn || !currentCode) return;
-  const tr = btn.closest('tr');
-  const branch = tr.getAttribute('data-branch');
+  const branch = btn.getAttribute('data-branch');
   if(!branch) return;
   const prep = getPrepState(currentCode);
-  prep[branch] = !prep[branch];
+  const entry = (prep[branch] && typeof prep[branch] === 'object') ? prep[branch] : {};
+  entry.done = !entry.done;
+  prep[branch] = entry;
   setPrepState(currentCode, prep);
   const row = index[currentCode];
   renderResult(currentCode, row);
+});
+
+resultBox.addEventListener('input', function(e){
+  const input = e.target.closest('.actual-input');
+  if(!input || !currentCode) return;
+  const branch = input.getAttribute('data-branch');
+  if(!branch) return;
+  const prep = getPrepState(currentCode);
+  const entry = (prep[branch] && typeof prep[branch] === 'object') ? prep[branch] : {};
+  entry.actual = input.value;
+  prep[branch] = entry;
+  setPrepState(currentCode, prep);
 });
 
 scanForm.addEventListener('submit', function(e){
@@ -399,6 +500,32 @@ installBtn.addEventListener('click', async function(){
 });
 window.addEventListener('appinstalled', function(){
   installBtn.classList.add('hidden');
+});
+
+exportBtn.addEventListener('click', function(){
+  const rows = [['الباركود', 'المنتج', 'الفرع', 'الكمية المطلوبة', 'الكمية الفعلية', 'الحالة']];
+  Object.keys(index).forEach(function(code){
+    const item = index[code];
+    const prep = getPrepState(code);
+    branchNames.forEach(function(name, i){
+      const qty = item.qtys[i];
+      const qtyNum = Number(qty) || 0;
+      if(qtyNum === 0){
+        rows.push([code, item.product || '', name, qty, 'لا يحتاج', 'لا يحتاج']);
+      } else {
+        const entry = (prep[name] && typeof prep[name] === 'object') ? prep[name] : {};
+        const actual = (entry.actual !== undefined && entry.actual !== '') ? entry.actual : qty;
+        const status = entry.done ? 'تم التحضير' : 'لسه';
+        rows.push([code, item.product || '', name, qty, actual, status]);
+      }
+    });
+  });
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'تقرير التحضير');
+  const now = new Date();
+  const stamp = now.toISOString().slice(0,10);
+  XLSX.writeFile(wb, 'تقرير-تحضير-' + stamp + '.xlsx');
 });
 </script>
 </body>
