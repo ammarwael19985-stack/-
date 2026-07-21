@@ -170,7 +170,8 @@
       <button id="resetBtn">رفع ملف جديد</button>
     </div>
 
-    <button id="exportBtn" class="file-btn" style="width:100%;margin-bottom:18px;background:var(--accent-dark);">📄 تصدير تقرير التحضير (إكسيل)</button>
+    <button id="exportBtn" class="file-btn" style="width:100%;margin-bottom:8px;background:var(--accent-dark);">📄 تصدير تقرير التحضير (إكسيل)</button>
+    <div id="exportStatus" class="error-msg hidden" style="margin-bottom:18px;"></div>
 
     <div class="scan-box">
       <label>اضرب الباركود دلوقتي</label>
@@ -205,6 +206,7 @@ const rowCountLabel = document.getElementById('rowCountLabel');
 const branchCountLabel = document.getElementById('branchCountLabel');
 const resetBtn = document.getElementById('resetBtn');
 const exportBtn = document.getElementById('exportBtn');
+const exportStatus = document.getElementById('exportStatus');
 const scanForm = document.getElementById('scanForm');
 const barcodeInput = document.getElementById('barcodeInput');
 const placeholder = document.getElementById('placeholder');
@@ -502,30 +504,57 @@ window.addEventListener('appinstalled', function(){
   installBtn.classList.add('hidden');
 });
 
-exportBtn.addEventListener('click', function(){
-  const rows = [['الباركود', 'المنتج', 'الفرع', 'الكمية المطلوبة', 'الكمية الفعلية', 'الحالة']];
-  Object.keys(index).forEach(function(code){
-    const item = index[code];
-    const prep = getPrepState(code);
-    branchNames.forEach(function(name, i){
-      const qty = item.qtys[i];
-      const qtyNum = Number(qty) || 0;
-      if(qtyNum === 0){
-        rows.push([code, item.product || '', name, qty, 'لا يحتاج', 'لا يحتاج']);
-      } else {
-        const entry = (prep[name] && typeof prep[name] === 'object') ? prep[name] : {};
-        const actual = (entry.actual !== undefined && entry.actual !== '') ? entry.actual : qty;
-        const status = entry.done ? 'تم التحضير' : 'لسه';
-        rows.push([code, item.product || '', name, qty, actual, status]);
-      }
+exportBtn.addEventListener('click', async function(){
+  exportStatus.classList.add('hidden');
+  try{
+    const rows = [['الباركود', 'المنتج', 'الفرع', 'الكمية المطلوبة', 'الكمية الفعلية', 'الحالة']];
+    Object.keys(index).forEach(function(code){
+      const item = index[code];
+      const prep = getPrepState(code);
+      branchNames.forEach(function(name, i){
+        const qty = item.qtys[i];
+        const qtyNum = Number(qty) || 0;
+        if(qtyNum === 0){
+          rows.push([code, item.product || '', name, qty, 'لا يحتاج', 'لا يحتاج']);
+        } else {
+          const entry = (prep[name] && typeof prep[name] === 'object') ? prep[name] : {};
+          const actual = (entry.actual !== undefined && entry.actual !== '') ? entry.actual : qty;
+          const status = entry.done ? 'تم التحضير' : 'لسه';
+          rows.push([code, item.product || '', name, qty, actual, status]);
+        }
+      });
     });
-  });
-  const ws = XLSX.utils.aoa_to_sheet(rows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'تقرير التحضير');
-  const now = new Date();
-  const stamp = now.toISOString().slice(0,10);
-  XLSX.writeFile(wb, 'تقرير-تحضير-' + stamp + '.xlsx');
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'تقرير التحضير');
+    const now = new Date();
+    const stamp = now.toISOString().slice(0,10);
+    const filename = 'تقرير-تحضير-' + stamp + '.xlsx';
+
+    const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+    const blob = new Blob([wbout], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+
+    let shared = false;
+    try{
+      if(navigator.canShare && window.File){
+        const file = new File([blob], filename, {type: blob.type});
+        if(navigator.canShare({files:[file]})){
+          await navigator.share({files:[file], title: filename});
+          shared = true;
+        }
+      }
+    }catch(shareErr){
+      // user cancelled the share sheet, or share isn't fully supported — fall through
+      shared = false;
+    }
+
+    if(!shared){
+      XLSX.writeFile(wb, filename);
+    }
+  }catch(err){
+    exportStatus.textContent = 'حصلت مشكلة في التصدير. جرب تفتح رابط الأداة في متصفح كروم بدل التطبيق وصدّر من هناك.';
+    exportStatus.classList.remove('hidden');
+  }
 });
 </script>
 </body>
