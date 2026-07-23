@@ -170,21 +170,8 @@
       <button id="resetBtn">رفع ملف جديد</button>
     </div>
 
-    <div style="display:flex;gap:8px;margin-bottom:8px;">
-      <button id="viewReportBtn" class="file-btn" style="flex:1;background:var(--accent-dark);">📋 عرض تقرير التحضير</button>
-      <button id="exportBtn" class="file-btn" style="flex:1;background:#4a4436;">📄 تحميل إكسيل</button>
-    </div>
+    <button id="exportBtn" class="file-btn" style="width:100%;margin-bottom:8px;background:var(--accent-dark);">📄 تحميل تقرير التحضير</button>
     <div id="exportStatus" class="error-msg hidden" style="margin-bottom:18px;"></div>
-
-    <div id="reportView" class="result hidden" style="max-height:340px;overflow:auto;">
-      <div class="pname" style="margin-bottom:10px;">تقرير التحضير الكامل</div>
-      <table class="branch-table" id="reportTable"></table>
-      <div style="display:flex;gap:8px;margin-top:14px;">
-        <button id="copyReportBtn" class="file-btn" style="flex:1;font-size:.82rem;padding:10px;">📋 نسخ كنص (يلزق في إكسيل)</button>
-        <button id="closeReportBtn" class="file-btn" style="flex:1;font-size:.82rem;padding:10px;background:#4a4436;">إغلاق</button>
-      </div>
-      <div id="copyStatus" class="progress-note" style="margin-top:10px;margin-bottom:0;"></div>
-    </div>
 
     <div class="scan-box">
       <label>اضرب الباركود دلوقتي</label>
@@ -220,12 +207,6 @@ const branchCountLabel = document.getElementById('branchCountLabel');
 const resetBtn = document.getElementById('resetBtn');
 const exportBtn = document.getElementById('exportBtn');
 const exportStatus = document.getElementById('exportStatus');
-const viewReportBtn = document.getElementById('viewReportBtn');
-const reportView = document.getElementById('reportView');
-const reportTable = document.getElementById('reportTable');
-const copyReportBtn = document.getElementById('copyReportBtn');
-const closeReportBtn = document.getElementById('closeReportBtn');
-const copyStatus = document.getElementById('copyStatus');
 const scanForm = document.getElementById('scanForm');
 const barcodeInput = document.getElementById('barcodeInput');
 const placeholder = document.getElementById('placeholder');
@@ -546,55 +527,6 @@ function buildReportRows(){
   return rows;
 }
 
-viewReportBtn.addEventListener('click', function(){
-  const rows = buildReportRows();
-  let html = '<tbody>';
-  rows.forEach(function(r, i){
-    const tag = i === 0 ? 'th' : 'td';
-    html += '<tr' + (i===0 ? ' style="font-weight:800;border-bottom:2px solid var(--ink);"' : '') + '>' +
-      r.map(function(cell){ return '<' + tag + ' style="padding:8px 6px;font-size:.82rem;text-align:right;">' + escapeHtml(String(cell)) + '</' + tag + '>'; }).join('') +
-      '</tr>';
-  });
-  html += '</tbody>';
-  reportTable.innerHTML = html;
-  copyStatus.textContent = '';
-  reportView.classList.remove('hidden');
-  reportView.scrollIntoView({behavior:'smooth', block:'start'});
-});
-
-closeReportBtn.addEventListener('click', function(){
-  reportView.classList.add('hidden');
-});
-
-copyReportBtn.addEventListener('click', async function(){
-  const rows = buildReportRows();
-  const text = rows.map(function(r){ return r.join('\t'); }).join('\n');
-  try{
-    if(navigator.clipboard && navigator.clipboard.writeText){
-      await navigator.clipboard.writeText(text);
-      copyStatus.textContent = '✓ اتنسخ! تقدر تلزقه في إكسيل أو واتساب.';
-    } else {
-      throw new Error('clipboard API not available');
-    }
-  }catch(e){
-    // fallback: select a hidden textarea and use execCommand
-    try{
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.focus();
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-      copyStatus.textContent = '✓ اتنسخ! تقدر تلزقه في إكسيل أو واتساب.';
-    }catch(e2){
-      copyStatus.textContent = 'مقدرتش أنسخ تلقائيًا. اعمل تحديد يدوي للجدول فوق وانسخه.';
-    }
-  }
-});
-
 exportBtn.addEventListener('click', async function(){
   exportStatus.classList.add('hidden');
   try{
@@ -626,7 +558,7 @@ exportBtn.addEventListener('click', async function(){
       XLSX.writeFile(wb, filename);
     }
   }catch(err){
-    exportStatus.textContent = 'التحميل المباشر مش مدعوم جوه التطبيق ده. استخدم زرار "عرض تقرير التحضير" فوق بدلاً منه، أو افتح رابط الأداة في متصفح كروم للتحميل كملف إكسيل.';
+    exportStatus.textContent = 'التحميل المباشر مش مدعوم جوه التطبيق ده. افتح رابط الأداة في متصفح كروم وصدّر التقرير من هناك.';
     exportStatus.classList.remove('hidden');
   }
 });
